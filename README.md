@@ -33,21 +33,47 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Run the script:
+### Basic Usage
+
+Run the script with default settings (downloads to `./downloads` directory):
 
 ```bash
-python zonerama-downloader.py
+python3 zonerama-downloader.py
 ```
 
-2. The script will:
+### Custom Download Directory
 
+Specify a custom download directory:
+
+```bash
+python3 zonerama-downloader.py --download-dir ~/Downloads/Zonerama
+# or short form:
+python3 zonerama-downloader.py -d /path/to/your/downloads
+```
+
+### Command Line Options
+
+```bash
+python3 zonerama-downloader.py --help
+```
+
+Available options:
+- `-d, --download-dir`: Specify download directory (default: `downloads`)
+- `--version`: Show program version
+- `-h, --help`: Show help message
+
+### Download Process
+
+1. The script will:
+
+   - Display configuration (download directory)
    - Open a Chrome browser window with Zonerama.com
    - Wait for you to manually log in
    - Press Enter in the terminal once you're logged in
    - Automatically navigate to the hidden albums section (or ask you to navigate manually)
    - Find all albums and download them one by one
 
-3. Downloaded files will be saved to the `downloads` directory in the project folder.
+2. Downloaded files will be saved to your specified directory (defaults to `downloads` folder).
 
 ## How it works
 

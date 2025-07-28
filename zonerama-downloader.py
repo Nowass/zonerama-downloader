@@ -1,6 +1,7 @@
 import os
 import time
 import requests
+import argparse
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -9,6 +10,34 @@ from selenium.webdriver.chrome.options import Options
 from urllib.parse import urljoin, urlparse
 import zipfile
 import tempfile
+
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(
+        description='Zonerama Album Downloader - Download albums from Zonerama.com',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python3 zonerama-downloader.py
+  python3 zonerama-downloader.py --download-dir ~/Downloads/Zonerama
+  python3 zonerama-downloader.py -d /path/to/downloads
+        """
+    )
+    
+    parser.add_argument(
+        '-d', '--download-dir',
+        type=str,
+        default='downloads',
+        help='Download directory path (default: downloads)'
+    )
+    
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='Zonerama Downloader 1.0.0'
+    )
+    
+    return parser.parse_args()
 
 class ZoneramaDownloader:
     def __init__(self, download_dir="downloads"):
@@ -160,6 +189,77 @@ class ZoneramaDownloader:
             print(f"Error getting album links: {e}")
             return []
     
+    def get_album_title_from_page(self):
+        """Extract album title from the current page"""
+        try:
+            # Try different selectors for album title
+            title_selectors = [
+                "h1",  # Main heading
+                ".album-title",
+                "#album-title", 
+                "[data-testid='album-title']",
+                "h2",
+                "h3",
+                ".title",
+                ".album-name"
+            ]
+            
+            for selector in title_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        title = element.text.strip()
+                        if title and len(title) > 2:  # Valid title
+                            print(f"Found album title: '{title}' using selector: {selector}")
+                            return title
+                except Exception as e:
+                    continue
+            
+            # Fallback: try to get title from page title
+            page_title = self.driver.title
+            if page_title and "zonerama" not in page_title.lower():
+                print(f"Using page title as album name: '{page_title}'")
+                return page_title
+                
+            return None
+            
+        except Exception as e:
+            print(f"Error getting album title: {e}")
+            return None
+    
+    def is_album_already_downloaded(self, album_title):
+        """Check if album is already downloaded by looking for ZIP file"""
+        try:
+            if not album_title:
+                return False
+                
+            # Clean the album title for filename use
+            import re
+            clean_title = re.sub(r'[<>:"/\\|?*]', '_', album_title)  # Replace invalid filename chars
+            clean_title = clean_title.strip()
+            
+            # Look for ZIP file with this name
+            potential_files = [
+                f"{clean_title}.zip",
+                f"{album_title}.zip",  # Try original too in case it's valid
+            ]
+            
+            for filename in potential_files:
+                zip_path = os.path.join(self.download_dir, filename)
+                if os.path.exists(zip_path):
+                    file_size = os.path.getsize(zip_path)
+                    if file_size > 1024:  # At least 1KB - not empty
+                        print(f"✅ Album already downloaded: {filename} ({file_size} bytes)")
+                        return True
+                    else:
+                        print(f"⚠️  Found but empty/small file: {filename} - will re-download")
+                        
+            return False
+            
+        except Exception as e:
+            print(f"Error checking for existing album: {e}")
+            return False
+
     def download_album(self, album_url, album_title):
         """Download a single album"""
         try:
@@ -168,6 +268,17 @@ class ZoneramaDownloader:
             
             # Wait for page to load
             time.sleep(3)
+            
+            # Get the actual album title from the page
+            actual_title = self.get_album_title_from_page()
+            if actual_title:
+                album_title = actual_title
+                print(f"Updated album title from page: {album_title}")
+            
+            # Check if album is already downloaded
+            if self.is_album_already_downloaded(album_title):
+                print(f"⏭️  SKIPPING: Album '{album_title}' is already downloaded")
+                return True  # Consider this a success since we don't need to download again
             
             # Look for the specific download button first
             download_selectors = [
@@ -383,6 +494,85 @@ class ZoneramaDownloader:
             print(f"Error downloading album {album_title}: {e}")
             return False
     
+    def unzip_all_albums(self):
+        """Unzip all ZIP files in the download directory"""
+        try:
+            print("\n" + "=" * 60)
+            print("📦 UNZIPPING DOWNLOADED ALBUMS")
+            print("=" * 60)
+            
+            # Find all ZIP files in download directory
+            zip_files = []
+            for file in os.listdir(self.download_dir):
+                if file.lower().endswith('.zip'):
+                    zip_path = os.path.join(self.download_dir, file)
+                    if os.path.getsize(zip_path) > 1024:  # At least 1KB
+                        zip_files.append(zip_path)
+            
+            if not zip_files:
+                print("📭 No ZIP files found to unzip.")
+                return True
+            
+            print(f"📥 Found {len(zip_files)} ZIP files to unzip:")
+            for zip_file in zip_files:
+                print(f"   - {os.path.basename(zip_file)}")
+            
+            print("\n🔄 Starting unzip process...")
+            
+            successful_unzips = 0
+            failed_unzips = 0
+            
+            for zip_path in zip_files:
+                zip_filename = os.path.basename(zip_path)
+                album_name = os.path.splitext(zip_filename)[0]  # Remove .zip extension
+                
+                # Create directory for this album
+                album_dir = os.path.join(self.download_dir, album_name)
+                
+                # Check if already unzipped
+                if os.path.exists(album_dir) and os.listdir(album_dir):
+                    print(f"⏭️  SKIPPING: {album_name} (already unzipped)")
+                    continue
+                
+                try:
+                    print(f"📂 Unzipping: {zip_filename}")
+                    
+                    # Create album directory
+                    os.makedirs(album_dir, exist_ok=True)
+                    
+                    # Unzip the file
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(album_dir)
+                    
+                    # Count extracted files
+                    extracted_files = []
+                    for root, dirs, files in os.walk(album_dir):
+                        extracted_files.extend(files)
+                    
+                    print(f"   ✅ SUCCESS: Extracted {len(extracted_files)} files to {album_name}/")
+                    successful_unzips += 1
+                    
+                except zipfile.BadZipFile as e:
+                    print(f"   ❌ ERROR: {zip_filename} is corrupted or not a valid ZIP file")
+                    failed_unzips += 1
+                except Exception as e:
+                    print(f"   ❌ ERROR: Failed to unzip {zip_filename}: {e}")
+                    failed_unzips += 1
+            
+            print("\n" + "=" * 60)
+            print("📊 UNZIP SUMMARY")
+            print("=" * 60)
+            print(f"✅ Successfully unzipped: {successful_unzips}")
+            print(f"❌ Failed to unzip: {failed_unzips}")
+            print(f"📁 Files location: {os.path.abspath(self.download_dir)}")
+            print("=" * 60)
+            
+            return failed_unzips == 0
+            
+        except Exception as e:
+            print(f"❌ Error during unzip process: {e}")
+            return False
+
     def run(self):
         """Main execution method"""
         try:
@@ -421,12 +611,71 @@ class ZoneramaDownloader:
             print(f"Error during execution: {e}")
         finally:
             if self.driver:
-                print("Keeping browser open for manual verification. Close it manually when done.")
-                # Don't auto-close to allow user to see download progress
-                # self.driver.quit()
+                print("\n" + "=" * 60)
+                print("🔽 DOWNLOAD PROCESS COMPLETED")
+                print("=" * 60)
+                print("⚠️  IMPORTANT: The browser will remain open to ensure downloads complete properly.")
+                print("📥 Downloads may still be in progress in the background.")
+                print("🔍 You can monitor the download progress in your browser's download manager.")
+                print("💾 Files are being downloaded to:", os.path.abspath(self.download_dir))
+                print("=" * 60)
+                print("🚫 DO NOT CLOSE THE BROWSER until all downloads are finished!")
+                print("   When ready, close the browser manually or press Ctrl+C here.")
+                print("=" * 60)
+                
+                try:
+                    # Keep the script running and browser open
+                    input("Press Enter when all downloads are complete to close the browser and unzip albums...")
+                    print("Closing browser...")
+                    self.driver.quit()
+                    print("✅ Browser closed successfully.")
+                    
+                    # Now unzip all downloaded albums
+                    print("\n⏳ Processing downloaded albums...")
+                    self.unzip_all_albums()
+                    
+                except KeyboardInterrupt:
+                    print("\n🛑 Interrupted by user. Closing browser...")
+                    self.driver.quit()
+                    print("✅ Browser closed.")
+                    
+                    # Ask if user wants to unzip anyway
+                    try:
+                        response = input("Would you like to unzip downloaded albums? (y/n): ")
+                        if response.lower().startswith('y'):
+                            self.unzip_all_albums()
+                    except KeyboardInterrupt:
+                        print("\n🛑 Skipping unzip process.")
+                        
+                except Exception as close_e:
+                    print(f"Error closing browser: {close_e}")
+                    print("Please close the browser manually.")
+                    
+                    # Still try to unzip
+                    try:
+                        response = input("Would you like to unzip downloaded albums? (y/n): ")
+                        if response.lower().startswith('y'):
+                            self.unzip_all_albums()
+                    except:
+                        print("Skipping unzip process.")
 
 def main():
-    downloader = ZoneramaDownloader()
+    """Main function with argument parsing"""
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    # Expand user home directory if needed
+    download_dir = os.path.expanduser(args.download_dir)
+    
+    # Display configuration
+    print("=" * 60)
+    print("🔽 Zonerama Album Downloader")
+    print("=" * 60)
+    print(f"📁 Download directory: {os.path.abspath(download_dir)}")
+    print("=" * 60)
+    
+    # Create and run downloader
+    downloader = ZoneramaDownloader(download_dir=download_dir)
     downloader.run()
 
 if __name__ == "__main__":
