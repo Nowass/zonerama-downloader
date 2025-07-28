@@ -202,144 +202,88 @@ class ZoneramaDownloader:
                     print(f"Clicked download button for: {album_title}")
                     
                     # Wait for modal to appear and fully load
-                    time.sleep(3)
+                    time.sleep(2)
                     
                     # Wait for modal to be visible
                     try:
                         WebDriverWait(self.driver, 10).until(
-                            EC.visibility_of_element_located((By.CSS_SELECTOR, "#dialog-download, .modal"))
+                            EC.visibility_of_element_located((By.CSS_SELECTOR, "#dialog-download"))
                         )
                         print("Modal is now visible")
                     except:
                         print("Modal did not appear")
                         continue
                     
-                    # Look for the switchery toggle for original photos
+                    # Enable original photos option
                     switch_clicked = False
-                    switch_selectors = [
-                        ".switchery",  # The switchery component
-                        "span.switchery",
-                        ".switchery-default",
-                        "//span[contains(@class, 'switchery')]",
-                        "#dialog-download .switchery",
-                        ".modal .switchery"
-                    ]
-                    
-                    for switch_selector in switch_selectors:
-                        try:
-                            print(f"Looking for switchery toggle with: {switch_selector}")
-                            if switch_selector.startswith("//"):
-                                switch_element = WebDriverWait(self.driver, 3).until(
-                                    EC.element_to_be_clickable((By.XPATH, switch_selector))
-                                )
-                            else:
-                                switch_element = WebDriverWait(self.driver, 3).until(
-                                    EC.element_to_be_clickable((By.CSS_SELECTOR, switch_selector))
-                                )
-                            
-                            # Check if switch is already on (has switchery-on class)
-                            switch_classes = switch_element.get_attribute('class')
-                            print(f"Switch classes: {switch_classes}")
-                            
-                            if 'switchery-on' not in switch_classes:
-                                print("Switch is OFF, clicking to turn ON")
-                                self.driver.execute_script("arguments[0].click();", switch_element)
-                                time.sleep(1)  # Wait for animation
-                                print("Clicked switchery toggle for original photos")
-                            else:
-                                print("Switch is already ON")
-                            
-                            switch_clicked = True
-                            break
-                            
-                        except Exception as switch_e:
-                            print(f"Switch selector {switch_selector} failed: {switch_e}")
-                            continue
-                    
-                    # Fallback: try to find and click regular checkbox if switchery failed
-                    if not switch_clicked:
-                        print("Switchery toggle failed, trying regular checkbox")
-                        checkbox_selectors = [
-                            "//label[contains(text(), 'Stáhnout originály fotek')]//input[@type='checkbox']",
-                            "//label[contains(text(), 'originály')]//input[@type='checkbox']",
-                            "#dialog-download input[type='checkbox']",
-                            ".modal input[type='checkbox']",
-                            "input[type='checkbox'][name*='original']",
-                            "input[type='checkbox'][id*='original']"
-                        ]
+                    try:
+                        print("Looking for original photos checkbox...")
+                        # First check if the checkbox is already checked
+                        checkbox = self.driver.find_element(By.CSS_SELECTOR, "#dialog-download-org")
                         
-                        for checkbox_selector in checkbox_selectors:
-                            try:
-                                print(f"Looking for checkbox with: {checkbox_selector}")
-                                if checkbox_selector.startswith("//"):
-                                    checkbox = WebDriverWait(self.driver, 3).until(
-                                        EC.element_to_be_clickable((By.XPATH, checkbox_selector))
-                                    )
-                                else:
-                                    checkbox = WebDriverWait(self.driver, 3).until(
-                                        EC.element_to_be_clickable((By.CSS_SELECTOR, checkbox_selector))
-                                    )
-                                
-                                if not checkbox.is_selected():
-                                    print("Checking checkbox for original photos")
-                                    self.driver.execute_script("arguments[0].click();", checkbox)
-                                    switch_clicked = True
-                                    print("Checkbox checked successfully")
-                                else:
-                                    print("Checkbox already checked")
-                                    switch_clicked = True
-                                break
-                            except Exception as checkbox_e:
-                                print(f"Checkbox selector {checkbox_selector} failed: {checkbox_e}")
-                                continue
-                    
-                    # Wait a moment after toggling the switch/checkbox
-                    time.sleep(2)
-                    
-                    # Now look for the download button in the modal
-                    modal_download_selectors = [
-                        "//button[contains(text(), 'Stáhnout') and not(contains(text(), 'originály'))]",
-                        "//a[contains(text(), 'Stáhnout') and not(contains(text(), 'originály'))]",
-                        "//button[contains(text(), 'Download')]",
-                        "//a[contains(text(), 'Download')]",
-                        "#dialog-download button.btn-success",
-                        "#dialog-download .btn-primary",
-                        ".modal button.btn-success",
-                        ".modal .btn-primary",
-                        "#dialog-download button[type='submit']",
-                        ".modal button[type='submit']",
-                        "#dialog-download button",
-                        ".modal-footer button"
-                    ]
-                    
-                    modal_clicked = False
-                    for modal_selector in modal_download_selectors:
-                        try:
-                            print(f"Looking for modal download button with: {modal_selector}")
-                            if modal_selector.startswith("//"):
-                                modal_element = WebDriverWait(self.driver, 3).until(
-                                    EC.element_to_be_clickable((By.XPATH, modal_selector))
-                                )
-                            else:
-                                modal_element = WebDriverWait(self.driver, 3).until(
-                                    EC.element_to_be_clickable((By.CSS_SELECTOR, modal_selector))
-                                )
+                        if not checkbox.is_selected():
+                            print("Original photos option is OFF, enabling it...")
+                            # Find the associated switchery element and click it
+                            switchery_elements = self.driver.find_elements(By.CSS_SELECTOR, "#dialog-download .switchery")
                             
-                            print(f"Found modal download element: {modal_selector}")
-                            self.driver.execute_script("arguments[0].click();", modal_element)
-                            print(f"Clicked modal download for: {album_title}")
-                            modal_clicked = True
-                            break
-                        except Exception as modal_e:
-                            print(f"Modal selector {modal_selector} failed: {modal_e}")
-                            continue
+                            for switchery in switchery_elements:
+                                classes = switchery.get_attribute('class')
+                                print(f"Found switchery with classes: {classes}")
+                                
+                                # If this switchery doesn't have 'switchery-on', click it
+                                if 'switchery-on' not in classes:
+                                    print("Clicking switchery to enable original photos")
+                                    self.driver.execute_script("arguments[0].click();", switchery)
+                                    time.sleep(1)  # Wait for animation
+                                    
+                                    # Verify the checkbox is now checked
+                                    if checkbox.is_selected():
+                                        print("Original photos option successfully enabled")
+                                        switch_clicked = True
+                                        break
+                                    else:
+                                        print("Checkbox still not checked, trying next switchery")
+                                else:
+                                    print("This switchery is already ON")
+                        else:
+                            print("Original photos option is already enabled")
+                            switch_clicked = True
+                            
+                    except Exception as switch_e:
+                        print(f"Error enabling original photos option: {switch_e}")
+                        # Fallback: try clicking the checkbox directly
+                        try:
+                            print("Trying to click checkbox directly...")
+                            checkbox = self.driver.find_element(By.CSS_SELECTOR, "#dialog-download-org")
+                            if not checkbox.is_selected():
+                                self.driver.execute_script("arguments[0].click();", checkbox)
+                                switch_clicked = True
+                                print("Checkbox clicked directly")
+                            else:
+                                switch_clicked = True
+                                print("Checkbox already selected")
+                        except Exception as checkbox_e:
+                            print(f"Direct checkbox click failed: {checkbox_e}")
                     
-                    if modal_clicked:
+                    # Wait a moment after enabling the option
+                    time.sleep(1)
+                    
+                    # Now click the download button in the modal
+                    try:
+                        print("Looking for download button in modal...")
+                        download_button = WebDriverWait(self.driver, 5).until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, "#dialog-download-submit"))
+                        )
+                        
+                        print("Found download button, clicking...")
+                        self.driver.execute_script("arguments[0].click();", download_button)
+                        print(f"Clicked download button for: {album_title}")
+                        
                         # Wait for modal to close (indicating download preparation is complete)
                         print("Waiting for modal to close (download preparation)...")
                         try:
                             WebDriverWait(self.driver, 60).until(
-                                EC.invisibility_of_element_located((By.CSS_SELECTOR, "#dialog-download, .modal"))
+                                EC.invisibility_of_element_located((By.CSS_SELECTOR, "#dialog-download"))
                             )
                             print("Modal closed - download preparation complete")
                         except:
@@ -347,61 +291,52 @@ class ZoneramaDownloader:
                         
                         download_clicked = True
                         break
-                    else:
-                        print("Modal opened but couldn't find download button inside")
-                        # Let's see what's in the modal
-                        try:
-                            modal_content = self.driver.find_element(By.CSS_SELECTOR, "#dialog-download, .modal")
-                            print("Modal content:")
-                            modal_links = modal_content.find_elements(By.TAG_NAME, "a")
-                            modal_buttons = modal_content.find_elements(By.TAG_NAME, "button")
-                            modal_spans = modal_content.find_elements(By.TAG_NAME, "span")
-                            
-                            for link in modal_links:
-                                text = link.text.strip()
-                                href = link.get_attribute('href')
-                                if text or href:
-                                    print(f"  Modal link: {text} -> {href}")
-                            
-                            for btn in modal_buttons:
-                                text = btn.text.strip()
-                                btn_type = btn.get_attribute('type')
-                                btn_class = btn.get_attribute('class')
-                                if text:
-                                    print(f"  Modal button: {text} (type: {btn_type}, class: {btn_class})")
-                            
-                            for span in modal_spans:
-                                span_class = span.get_attribute('class')
-                                if 'switchery' in span_class:
-                                    print(f"  Modal span (switchery): class={span_class}")
-                        except:
-                            print("Could not inspect modal content")
                         
-                        # Try clicking any visible download-related element
-                        try:
-                            all_modal_elements = self.driver.find_elements(By.CSS_SELECTOR, "#dialog-download *, .modal *")
-                            for elem in all_modal_elements:
-                                text = elem.text.strip().lower()
-                                if text == 'stáhnout' and 'originály' not in text:
-                                    print(f"Trying to click download button: {text}")
-                                    self.driver.execute_script("arguments[0].click();", elem)
-                                    modal_clicked = True
-                                    download_clicked = True
-                                    
-                                    # Wait for modal to close
-                                    print("Waiting for modal to close...")
-                                    try:
-                                        WebDriverWait(self.driver, 60).until(
-                                            EC.invisibility_of_element_located((By.CSS_SELECTOR, "#dialog-download, .modal"))
-                                        )
-                                        print("Modal closed - download preparation complete")
-                                    except:
-                                        print("Modal did not close within 60 seconds")
-                                    break
-                        except:
-                            pass
+                    except Exception as download_e:
+                        print(f"Error clicking download button: {download_e}")
                         
-                        if download_clicked:
+                        # Fallback: try alternative selectors
+                        fallback_selectors = [
+                            "//button[contains(text(), 'Stáhnout') and not(contains(text(), 'originály'))]",
+                            "#dialog-download button.btn-success",
+                            "#dialog-download .btn-primary"
+                        ]
+                        
+                        modal_clicked = False
+                        for fallback_selector in fallback_selectors:
+                            try:
+                                print(f"Trying fallback selector: {fallback_selector}")
+                                if fallback_selector.startswith("//"):
+                                    modal_element = WebDriverWait(self.driver, 3).until(
+                                        EC.element_to_be_clickable((By.XPATH, fallback_selector))
+                                    )
+                                else:
+                                    modal_element = WebDriverWait(self.driver, 3).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, fallback_selector))
+                                    )
+                                
+                                print(f"Found fallback download button")
+                                self.driver.execute_script("arguments[0].click();", modal_element)
+                                print(f"Clicked fallback download button for: {album_title}")
+                                
+                                # Wait for modal to close
+                                try:
+                                    WebDriverWait(self.driver, 60).until(
+                                        EC.invisibility_of_element_located((By.CSS_SELECTOR, "#dialog-download"))
+                                    )
+                                    print("Modal closed - download preparation complete")
+                                except:
+                                    print("Modal did not close within 60 seconds")
+                                
+                                modal_clicked = True
+                                download_clicked = True
+                                break
+                                
+                            except Exception as fallback_e:
+                                print(f"Fallback selector {fallback_selector} failed: {fallback_e}")
+                                continue
+                        
+                        if modal_clicked:
                             break
                     
                 except Exception as e:
