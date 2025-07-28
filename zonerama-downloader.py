@@ -10,6 +10,7 @@ from selenium.webdriver.chrome.options import Options
 from urllib.parse import urljoin, urlparse
 import zipfile
 import tempfile
+import unicodedata
 
 def parse_arguments():
     """Parse command line arguments"""
@@ -80,6 +81,18 @@ class ZoneramaDownloader:
         
         # Create download directory if it doesn't exist
         os.makedirs(self.download_dir, exist_ok=True)
+    
+    def remove_diacritics(self, text):
+        """Remove diacritics/accents from text to match filesystem naming"""
+        if not text:
+            return text
+        
+        # Normalize to decomposed form (NFD) and remove combining characters
+        normalized = unicodedata.normalize('NFD', text)
+        # Filter out combining characters (diacritics)
+        without_diacritics = ''.join(char for char in normalized 
+                                   if unicodedata.category(char) != 'Mn')
+        return without_diacritics
         
     def setup_driver(self):
         """Setup Chrome driver with options"""
@@ -265,28 +278,49 @@ class ZoneramaDownloader:
         try:
             if not album_title:
                 return False
-                
-            # Clean the album title for filename use
-            import re
-            clean_title = re.sub(r'[<>:"/\\|?*]', '_', album_title)  # Replace invalid filename chars
-            clean_title = clean_title.strip()
             
-            # Look for ZIP file with this name
-            potential_files = [
-                f"{clean_title}.zip",
-                f"{album_title}.zip",  # Try original too in case it's valid
+            # Remove diacritics from album title to match filesystem naming
+            album_title_no_diacritics = self.remove_diacritics(album_title)
+            
+            # Clean the album title for filename use (this is what the browser/system would do)
+            import re
+            
+            # Apply the same cleaning logic that would be applied when downloading
+            def clean_for_filename(text):
+                # Replace invalid filename characters with underscore
+                cleaned = re.sub(r'[<>:"/\\|?*&]', '_', text)
+                return cleaned.strip()
+            
+            # Try various combinations to match how the file might be named
+            potential_names = [
+                clean_for_filename(album_title_no_diacritics),  # Most likely: no diacritics + cleaned
+                clean_for_filename(album_title),  # Original + cleaned
+                album_title_no_diacritics,  # No diacritics, no cleaning
+                album_title,  # Original, no changes
             ]
             
-            for filename in potential_files:
+            # Remove duplicates while preserving order  
+            seen = set()
+            unique_names = []
+            for name in potential_names:
+                if name and name not in seen:
+                    seen.add(name)
+                    unique_names.append(name)
+            
+            # Check for ZIP files with these names
+            for name in unique_names:
+                filename = f"{name}.zip"
                 zip_path = os.path.join(self.download_dir, filename)
                 if os.path.exists(zip_path):
                     file_size = os.path.getsize(zip_path)
                     if file_size > 1024:  # At least 1KB - not empty
                         print(f"✅ Album already downloaded: {filename} ({file_size} bytes)")
+                        print(f"   Original title: '{album_title}'")
+                        print(f"   Matched as: '{name}'")
                         return True
                     else:
                         print(f"⚠️  Found but empty/small file: {filename} - will re-download")
-                        
+            
             return False
             
         except Exception as e:
