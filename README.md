@@ -6,9 +6,13 @@ A Python script to automatically download all albums from the "Skrytá alba" (Hi
 
 - Opens Zonerama in a browser and waits for manual login
 - Automatically navigates to the hidden albums section
-- Finds all available albums
-- Downloads each album by clicking the download button
+- Finds all available albums with duplicate detection
+- Downloads each album by clicking the download button and enabling original photo quality
+- Keeps browser open to ensure downloads complete properly
 - Provides progress feedback during the process
+- **Optional unzip functionality** - automatically extract downloaded albums
+- **Smart cleanup** - optionally delete ZIP files after successful extraction
+- **Configurable download directory** with flexible path support
 
 ## Prerequisites
 
@@ -59,21 +63,55 @@ python3 zonerama-downloader.py --help
 
 Available options:
 - `-d, --download-dir`: Specify download directory (default: `downloads`)
+- `-u, --unzip`: Automatically unzip downloaded albums after download completes
+- `--delete`: Delete ZIP files after successful unzipping (requires `--unzip/-u`)
 - `--version`: Show program version
 - `-h, --help`: Show help message
+
+### Advanced Usage Examples
+
+```bash
+# Download only (no automatic unzip)
+python3 zonerama-downloader.py
+
+# Download and automatically unzip albums
+python3 zonerama-downloader.py -u
+
+# Download, unzip, and delete ZIP files (saves space)
+python3 zonerama-downloader.py -ud
+
+# Custom directory with unzip and delete
+python3 zonerama-downloader.py -d ~/Downloads/Zonerama -ud
+
+# Long form (same as -ud)
+python3 zonerama-downloader.py --download-dir ~/Photos --unzip --delete
+```
+
+### Path Support
+
+The download directory supports various path formats:
+- **Relative paths**: `./downloads`, `../backups`
+- **Absolute paths**: `/home/user/Downloads`
+- **Home directory expansion**: `~/Downloads/Zonerama`
+- **Default fallback**: `downloads` directory
 
 ### Download Process
 
 1. The script will:
 
-   - Display configuration (download directory)
+   - Display configuration (download directory, unzip settings)
    - Open a Chrome browser window with Zonerama.com
    - Wait for you to manually log in
    - Press Enter in the terminal once you're logged in
-   - Automatically navigate to the hidden albums section (or ask you to navigate manually)
-   - Find all albums and download them one by one
+   - Automatically navigate to the hidden albums section
+   - Find all albums and check for duplicates (skips already downloaded)
+   - Download new albums one by one
+   - Keep browser open until you confirm downloads are complete
+   - Optionally unzip albums and clean up ZIP files (if requested)
 
 2. Downloaded files will be saved to your specified directory (defaults to `downloads` folder).
+
+3. If unzip is enabled (`-u` or `-ud`), each album will be extracted to its own folder.
 
 ## How it works
 
@@ -101,21 +139,61 @@ If the script can't find albums or download buttons, the website structure might
 
 ### Download location
 
-By default, files are downloaded to the `downloads` directory. You can change this by modifying the `download_dir` parameter when creating the `ZoneramaDownloader` instance.
+By default, files are downloaded to the `downloads` directory. You can change this using the `-d` or `--download-dir` option:
+
+```bash
+python3 zonerama-downloader.py -d ~/Downloads/Zonerama
+```
+
+### Unzip and cleanup options
+
+- Use `-u` or `--unzip` to automatically extract downloaded albums
+- Use `-ud` or `--unzip --delete` to extract and then delete ZIP files to save space
+- The `--delete` option can only be used with `--unzip` for safety
+
+## File Organization
+
+When using the unzip feature, the script organizes files as follows:
+
+```
+downloads/
+├── Album Name 1.zip          # Original ZIP (deleted if -ud used)
+├── Album Name 1/             # Extracted folder
+│   ├── photo1.jpg
+│   ├── photo2.jpg
+│   └── ...
+├── Album Name 2.zip
+├── Album Name 2/
+│   └── ...
+```
 
 ## Customization
 
-You can customize the download directory by modifying the script:
+The script provides several customization options via command line arguments:
+
+```bash
+# Basic customization
+python3 zonerama-downloader.py -d ~/Photos -u
+
+# Full customization  
+python3 zonerama-downloader.py --download-dir /backup/zonerama --unzip --delete
+```
+
+For programmatic use, you can also customize by modifying the script:
 
 ```python
 downloader = ZoneramaDownloader(download_dir="my_custom_folder")
+downloader.run(unzip_albums=True, delete_zips=True)
 ```
 
 ## Notes
 
-- The script keeps the browser open after completion so you can monitor download progress
-- Downloads are initiated by clicking the download buttons, actual download speed depends on your connection and Zonerama's servers
+- The script keeps the browser open after downloads are initiated so you can monitor progress and ensure downloads complete
+- Downloads are initiated by clicking the download buttons; actual download speed depends on your connection and Zonerama's servers
 - The script handles both Czech and English versions of the Zonerama interface
+- **Duplicate detection**: Already downloaded albums are automatically skipped
+- **Original quality**: The script automatically enables "original photos" option for best quality
+- **Unzip safety**: The script only processes ZIP files larger than 1KB to avoid corrupted files
 
 ## License
 

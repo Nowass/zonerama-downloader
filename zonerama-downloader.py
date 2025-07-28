@@ -13,6 +13,17 @@ import tempfile
 
 def parse_arguments():
     """Parse command line arguments"""
+    import sys
+    
+    # Handle special combined flags like -ud
+    processed_args = []
+    for arg in sys.argv[1:]:
+        if arg == '-ud':
+            # Expand -ud to -u --delete
+            processed_args.extend(['-u', '--delete'])
+        else:
+            processed_args.append(arg)
+    
     parser = argparse.ArgumentParser(
         description='Zonerama Album Downloader - Download albums from Zonerama.com',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -21,6 +32,9 @@ Examples:
   python3 zonerama-downloader.py
   python3 zonerama-downloader.py --download-dir ~/Downloads/Zonerama
   python3 zonerama-downloader.py -d /path/to/downloads
+  python3 zonerama-downloader.py -u                    # Download and unzip
+  python3 zonerama-downloader.py -ud                   # Download, unzip and delete ZIP files
+  python3 zonerama-downloader.py --unzip --delete      # Same as -ud (long form)
         """
     )
     
@@ -32,12 +46,31 @@ Examples:
     )
     
     parser.add_argument(
+        '-u', '--unzip',
+        action='store_true',
+        help='Automatically unzip downloaded albums after download completes'
+    )
+    
+    parser.add_argument(
+        '--delete',
+        action='store_true',
+        help='Delete ZIP files after successful unzipping (requires --unzip/-u)'
+    )
+    
+    parser.add_argument(
         '--version',
         action='version',
         version='Zonerama Downloader 1.0.0'
     )
     
-    return parser.parse_args()
+    # Parse the processed arguments
+    args = parser.parse_args(processed_args)
+    
+    # Validate argument combinations
+    if args.delete and not args.unzip:
+        parser.error("--delete requires --unzip/-u to be specified. Use -ud or --unzip --delete")
+    
+    return args
 
 class ZoneramaDownloader:
     def __init__(self, download_dir="downloads"):
@@ -494,8 +527,12 @@ class ZoneramaDownloader:
             print(f"Error downloading album {album_title}: {e}")
             return False
     
-    def unzip_all_albums(self):
-        """Unzip all ZIP files in the download directory"""
+    def unzip_all_albums(self, delete_zips=False):
+        """Unzip all ZIP files in the download directory
+        
+        Args:
+            delete_zips (bool): If True, delete ZIP files after successful extraction
+        """
         try:
             print("\n" + "=" * 60)
             print("📦 UNZIPPING DOWNLOADED ALBUMS")
@@ -517,10 +554,14 @@ class ZoneramaDownloader:
             for zip_file in zip_files:
                 print(f"   - {os.path.basename(zip_file)}")
             
+            if delete_zips:
+                print("🗑️  ZIP files will be deleted after successful extraction")
+            
             print("\n🔄 Starting unzip process...")
             
             successful_unzips = 0
             failed_unzips = 0
+            deleted_zips = 0
             
             for zip_path in zip_files:
                 zip_filename = os.path.basename(zip_path)
@@ -532,6 +573,15 @@ class ZoneramaDownloader:
                 # Check if already unzipped
                 if os.path.exists(album_dir) and os.listdir(album_dir):
                     print(f"⏭️  SKIPPING: {album_name} (already unzipped)")
+                    
+                    # If delete is requested and this was already unzipped, offer to delete the ZIP
+                    if delete_zips:
+                        try:
+                            os.remove(zip_path)
+                            print(f"   🗑️  DELETED: {zip_filename} (album was already unzipped)")
+                            deleted_zips += 1
+                        except Exception as del_e:
+                            print(f"   ⚠️  Could not delete {zip_filename}: {del_e}")
                     continue
                 
                 try:
@@ -552,6 +602,15 @@ class ZoneramaDownloader:
                     print(f"   ✅ SUCCESS: Extracted {len(extracted_files)} files to {album_name}/")
                     successful_unzips += 1
                     
+                    # Delete ZIP file if requested and extraction was successful
+                    if delete_zips:
+                        try:
+                            os.remove(zip_path)
+                            print(f"   🗑️  DELETED: {zip_filename}")
+                            deleted_zips += 1
+                        except Exception as del_e:
+                            print(f"   ⚠️  Could not delete {zip_filename}: {del_e}")
+                    
                 except zipfile.BadZipFile as e:
                     print(f"   ❌ ERROR: {zip_filename} is corrupted or not a valid ZIP file")
                     failed_unzips += 1
@@ -564,6 +623,8 @@ class ZoneramaDownloader:
             print("=" * 60)
             print(f"✅ Successfully unzipped: {successful_unzips}")
             print(f"❌ Failed to unzip: {failed_unzips}")
+            if delete_zips:
+                print(f"🗑️  ZIP files deleted: {deleted_zips}")
             print(f"📁 Files location: {os.path.abspath(self.download_dir)}")
             print("=" * 60)
             
@@ -573,8 +634,13 @@ class ZoneramaDownloader:
             print(f"❌ Error during unzip process: {e}")
             return False
 
-    def run(self):
-        """Main execution method"""
+    def run(self, unzip_albums=False, delete_zips=False):
+        """Main execution method
+        
+        Args:
+            unzip_albums (bool): Whether to unzip albums after download
+            delete_zips (bool): Whether to delete ZIP files after successful unzip
+        """
         try:
             # Setup driver
             self.setup_driver()
@@ -625,14 +691,18 @@ class ZoneramaDownloader:
                 
                 try:
                     # Keep the script running and browser open
-                    input("Press Enter when all downloads are complete to close the browser and unzip albums...")
+                    input("Press Enter when all downloads are complete to close the browser" + 
+                          (" and unzip albums..." if unzip_albums else "..."))
                     print("Closing browser...")
                     self.driver.quit()
                     print("✅ Browser closed successfully.")
                     
-                    # Now unzip all downloaded albums
-                    print("\n⏳ Processing downloaded albums...")
-                    self.unzip_all_albums()
+                    # Unzip albums if requested
+                    if unzip_albums:
+                        print("\n⏳ Processing downloaded albums...")
+                        self.unzip_all_albums(delete_zips=delete_zips)
+                    else:
+                        print("📦 Unzipping skipped (use -u to enable auto-unzip)")
                     
                 except KeyboardInterrupt:
                     print("\n🛑 Interrupted by user. Closing browser...")
@@ -640,24 +710,26 @@ class ZoneramaDownloader:
                     print("✅ Browser closed.")
                     
                     # Ask if user wants to unzip anyway
-                    try:
-                        response = input("Would you like to unzip downloaded albums? (y/n): ")
-                        if response.lower().startswith('y'):
-                            self.unzip_all_albums()
-                    except KeyboardInterrupt:
-                        print("\n🛑 Skipping unzip process.")
-                        
+                    if unzip_albums:
+                        try:
+                            response = input("Would you like to unzip downloaded albums? (y/n): ")
+                            if response.lower().startswith('y'):
+                                self.unzip_all_albums(delete_zips=delete_zips)
+                        except KeyboardInterrupt:
+                            print("\n🛑 Skipping unzip process.")
+                            
                 except Exception as close_e:
                     print(f"Error closing browser: {close_e}")
                     print("Please close the browser manually.")
                     
-                    # Still try to unzip
-                    try:
-                        response = input("Would you like to unzip downloaded albums? (y/n): ")
-                        if response.lower().startswith('y'):
-                            self.unzip_all_albums()
-                    except:
-                        print("Skipping unzip process.")
+                    # Still try to unzip if requested
+                    if unzip_albums:
+                        try:
+                            response = input("Would you like to unzip downloaded albums? (y/n): ")
+                            if response.lower().startswith('y'):
+                                self.unzip_all_albums(delete_zips=delete_zips)
+                        except:
+                            print("Skipping unzip process.")
 
 def main():
     """Main function with argument parsing"""
@@ -672,11 +744,20 @@ def main():
     print("🔽 Zonerama Album Downloader")
     print("=" * 60)
     print(f"📁 Download directory: {os.path.abspath(download_dir)}")
+    
+    if args.unzip:
+        if args.delete:
+            print("📦 Auto-unzip: ✅ ENABLED (with ZIP deletion)")
+        else:
+            print("📦 Auto-unzip: ✅ ENABLED")
+    else:
+        print("📦 Auto-unzip: ❌ DISABLED (use -u to enable)")
+    
     print("=" * 60)
     
     # Create and run downloader
     downloader = ZoneramaDownloader(download_dir=download_dir)
-    downloader.run()
+    downloader.run(unzip_albums=args.unzip, delete_zips=args.delete)
 
 if __name__ == "__main__":
     main()
