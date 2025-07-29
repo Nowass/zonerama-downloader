@@ -1,200 +1,250 @@
 # Zonerama Downloader
 
-A Python script to automatically download all albums from the "Skrytá alba" (Hidden Albums) section of Zonerama.com.
+A Python tool to automatically download all albums from Zonerama.com using Selenium WebDriver.
 
 ## Features
 
-- Opens Zonerama in a browser and waits for manual login
-- Automatically navigates to the hidden albums section
-- Finds all available albums with duplicate detection
-- Downloads each album by clicking the download button and enabling original photo quality
-- Keeps browser open to ensure downloads complete properly
-- Provides progress feedback during the process
-- **Optional unzip functionality** - automatically extract downloaded albums
-- **Smart cleanup** - optionally delete ZIP files after successful extraction
-- **Configurable download directory** with flexible path support
+- **Automatic album discovery**: Finds all albums on your Zonerama page
+- **Duplicate detection**: Skips albums that are already downloaded (supports diacritic normalization)
+- **Smart download management**: Handles download timeouts and retries
+- **Configurable download location**: Set custom download directory via CLI
+- **Auto-unzip functionality**: Automatically extract downloaded ZIP files
+- **ZIP cleanup option**: Delete ZIP files after successful extraction
+- **Browser session persistence**: Keeps browser open for efficient batch downloads
+- **Cookie handling**: Automatically handles cookie consent modals
+- **Progress tracking**: Shows download progress and statistics
+- **CLI interface**: Full command-line interface with flexible options
+- **Modular architecture**: Clean, maintainable code structure
 
-## Prerequisites
+## Architecture
 
-- Python 3.6 or higher
-- Google Chrome browser installed
-- ChromeDriver (will be managed automatically by webdriver-manager)
+This project is available in two versions:
+
+### 1. Modular Version (Recommended) - `main.py`
+- **Clean architecture**: Separated into logical modules for better maintainability
+- **Easy to extend**: Modular design makes it simple to add new features
+- **Better testing**: Each module can be tested independently
+- **Type safety**: Improved code organization with clear interfaces
+
+**Structure:**
+```
+src/
+├── __init__.py      # Package initialization
+├── config.py        # Configuration management
+├── cli.py           # Command line interface
+├── file_utils.py    # File operations and utilities
+├── scraper.py       # Web scraping with Selenium
+└── downloader.py    # Main download orchestration
+```
+
+### 2. Legacy Version - `zonerama-downloader.py`
+- **Single file**: All functionality in one monolithic script
+- **Simple deployment**: Easy to distribute as single file
+- **Legacy compatibility**: Maintains original interface
+
+Both versions provide exactly the same functionality and CLI interface.
+
+## Requirements
+
+- Python 3.6+
+- Chrome browser
+- ChromeDriver (automatically managed by Selenium)
+- Required Python packages (see requirements.txt)
 
 ## Installation
 
 1. Clone this repository:
-
 ```bash
-git clone https://github.com/Nowass/zonerama-downloader.git
+git clone <repository-url>
 cd zonerama-downloader
 ```
 
-2. Install required dependencies:
-
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-### Basic Usage
-
-Run the script with default settings (downloads to `./downloads` directory):
-
+### Modular Version (Recommended)
 ```bash
+# Basic usage
+python3 main.py
+
+# With options
+python3 main.py -ud --download-dir ~/Downloads/Zonerama
+```
+
+### Legacy Version
+```bash
+# Basic usage
 python3 zonerama-downloader.py
+
+# With options
+python3 zonerama-downloader.py -ud --download-dir ~/Downloads/Zonerama
 ```
 
-### Custom Download Directory
-
-Specify a custom download directory:
-
-```bash
-python3 zonerama-downloader.py --download-dir ~/Downloads/Zonerama
-# or short form:
-python3 zonerama-downloader.py -d /path/to/your/downloads
-```
+Both versions support identical command-line interfaces.
 
 ### Command Line Options
 
-```bash
-python3 zonerama-downloader.py --help
-```
-
-Available options:
-- `-d, --download-dir`: Specify download directory (default: `downloads`)
+- `-d, --download-dir`: Set custom download directory (default: `downloads/`)
 - `-u, --unzip`: Automatically unzip downloaded albums after download completes
-- `--delete`: Delete ZIP files after successful unzipping (requires `--unzip/-u`)
-- `--version`: Show program version
+- `--delete`: Delete ZIP files after successful unzipping (requires `-u` or `--unzip`)
+- `-ud`: Convenient shorthand for `-u --delete` (download, unzip, and delete ZIPs)
+- `--version`: Show version information
 - `-h, --help`: Show help message
 
-### Advanced Usage Examples
+### Examples
 
 ```bash
-# Download only (no automatic unzip)
-python3 zonerama-downloader.py
+# Download to default directory
+python3 main.py
 
-# Download and automatically unzip albums
-python3 zonerama-downloader.py -u
+# Download to specific directory
+python3 main.py -d ~/MyPhotos
 
-# Download, unzip, and delete ZIP files (saves space)
-python3 zonerama-downloader.py -ud
+# Download, unzip, and keep ZIP files
+python3 main.py -u
 
-# Custom directory with unzip and delete
-python3 zonerama-downloader.py -d ~/Downloads/Zonerama -ud
+# Download, unzip, and delete ZIP files
+python3 main.py -ud
 
-# Long form (same as -ud)
-python3 zonerama-downloader.py --download-dir ~/Photos --unzip --delete
+# Full explicit form
+python3 main.py --download-dir ~/Photos --unzip --delete
 ```
 
-### Path Support
+## How It Works
 
-The download directory supports various path formats:
-- **Relative paths**: `./downloads`, `../backups`
-- **Absolute paths**: `/home/user/Downloads`
-- **Home directory expansion**: `~/Downloads/Zonerama`
-- **Default fallback**: `downloads` directory
+1. **Browser Setup**: Opens Chrome browser with download preferences
+2. **Navigation**: Navigates to Zonerama albums page
+3. **Cookie Handling**: Automatically accepts cookie consent if needed
+4. **Album Discovery**: Finds all album elements on the page
+5. **Duplicate Detection**: Checks if albums already exist (with diacritic normalization)
+6. **Download Process**: For each new album:
+   - Clicks on album to open it
+   - Locates and clicks download button
+   - Handles download modal
+   - Waits for download completion
+   - Returns to album list
+7. **Post-processing**: If enabled, unzips all downloaded files and optionally deletes ZIPs
+8. **Statistics**: Shows final download summary
 
-### Download Process
+## Features in Detail
 
-1. The script will:
+### Duplicate Detection with Diacritic Support
+The tool intelligently detects already downloaded albums by comparing names with diacritic normalization. This means albums like "Prázdniny" and "Prazdniny" are recognized as the same album.
 
-   - Display configuration (download directory, unzip settings)
-   - Open a Chrome browser window with Zonerama.com
-   - Wait for you to manually log in
-   - Press Enter in the terminal once you're logged in
-   - Automatically navigate to the hidden albums section
-   - Find all albums and check for duplicates (skips already downloaded)
-   - Download new albums one by one
-   - Keep browser open until you confirm downloads are complete
-   - Optionally unzip albums and clean up ZIP files (if requested)
+### Smart Download Management
+- Waits for downloads to complete before proceeding
+- Handles browser download timeouts gracefully
+- Maintains browser session for efficient batch processing
+- Provides detailed progress information
 
-2. Downloaded files will be saved to your specified directory (defaults to `downloads` folder).
+### Flexible Unzipping
+- Option to automatically unzip downloaded albums
+- Choice to keep or delete original ZIP files
+- Creates properly named directories for each album
+- Handles ZIP extraction errors gracefully
 
-3. If unzip is enabled (`-u` or `-ud`), each album will be extracted to its own folder.
+### CLI Interface
+- Supports short flags (`-u`, `-d`) and long options (`--unzip`, `--download-dir`)
+- Special combined flag `-ud` for common use case
+- Comprehensive help and usage examples
+- Proper argument validation
 
-## How it works
+### Modular Architecture (New Version)
+- **Separation of concerns**: Each module handles specific functionality
+- **Config management**: Centralized configuration with `Config` class
+- **Clean interfaces**: Well-defined module boundaries
+- **Easy maintenance**: Code changes are isolated to relevant modules
+- **Extensible design**: Simple to add new features or modify behavior
 
-The script uses Selenium WebDriver to:
+## Module Overview
 
-1. Open a browser session to Zonerama
-2. Wait for manual authentication (for security)
-3. Navigate to the hidden albums section
-4. Extract all album links from the page
-5. Visit each album and click the download button
-6. Monitor the download progress
+### `src/config.py`
+Manages all configuration settings, URLs, timeouts, and user preferences.
+
+### `src/cli.py`
+Handles command-line argument parsing, user interactions, and configuration display.
+
+### `src/file_utils.py`
+Provides file operations, path management, ZIP handling, and diacritic normalization.
+
+### `src/scraper.py`
+Contains the `ZoneramaScraper` class for all Selenium WebDriver interactions.
+
+### `src/downloader.py`
+The main `ZoneramaDownloader` class that orchestrates the entire download process.
+
+### `main.py`
+Entry point that ties all modules together and handles application lifecycle.
+
+## Configuration
+
+The tool uses sensible defaults but can be customized:
+
+- **Download Directory**: Default is `downloads/` in current directory
+- **Download Timeout**: 300 seconds (5 minutes) per album
+- **Browser Timeouts**: 10 seconds for page elements
+- **Unzip Behavior**: Disabled by default, enabled with `-u` flag
+- **ZIP Deletion**: Disabled by default, enabled with `--delete` flag
+
+## Error Handling
+
+The tool includes robust error handling for:
+- Network connectivity issues
+- Page loading timeouts
+- Missing download buttons
+- Corrupted ZIP files
+- File system permissions
+- Browser crashes
 
 ## Troubleshooting
 
-### ChromeDriver issues
+### Common Issues
 
-If you encounter ChromeDriver issues, make sure you have Google Chrome installed and update to the latest version.
+1. **ChromeDriver issues**: Make sure Chrome browser is installed and up to date
+2. **Download timeouts**: Check internet connection and increase timeout if needed
+3. **Permission errors**: Ensure write permissions to download directory
+4. **Missing albums**: Verify you're logged in to Zonerama in the browser session
 
-### Album not found
+### Browser Requirements
+- Chrome browser must be installed
+- ChromeDriver is automatically managed by Selenium 4.x
+- No need to manually install ChromeDriver
 
-If the script can't find albums or download buttons, the website structure might have changed. You may need to:
+## Development
 
-- Navigate manually to the hidden albums section when prompted
-- Check if the CSS selectors in the code need updating
+### Using the Modular Version
+For development and customization, use the modular version (`main.py`):
 
-### Download location
+1. **Configuration changes**: Edit `src/config.py`
+2. **CLI modifications**: Update `src/cli.py`
+3. **New file operations**: Add to `src/file_utils.py`
+4. **Web scraping changes**: Modify `src/scraper.py`
+5. **Download logic**: Update `src/downloader.py`
 
-By default, files are downloaded to the `downloads` directory. You can change this using the `-d` or `--download-dir` option:
+### Adding New Features
+The modular architecture makes it easy to extend functionality:
+- Add new CLI options in `cli.py`
+- Implement new file operations in `file_utils.py`
+- Extend web scraping capabilities in `scraper.py`
+- Modify download behavior in `downloader.py`
 
-```bash
-python3 zonerama-downloader.py -d ~/Downloads/Zonerama
-```
+## Technical Details
 
-### Unzip and cleanup options
+- **Selenium WebDriver**: For browser automation
+- **Chrome Browser**: Required for download functionality
+- **Request handling**: Robust timeout and retry mechanisms
+- **File operations**: Safe file handling with proper error checking
+- **Unicode support**: Full diacritic normalization for international album names
+- **Modular design**: Clean separation of concerns for maintainability
 
-- Use `-u` or `--unzip` to automatically extract downloaded albums
-- Use `-ud` or `--unzip --delete` to extract and then delete ZIP files to save space
-- The `--delete` option can only be used with `--unzip` for safety
+## Contributing
 
-## File Organization
-
-When using the unzip feature, the script organizes files as follows:
-
-```
-downloads/
-├── Album Name 1.zip          # Original ZIP (deleted if -ud used)
-├── Album Name 1/             # Extracted folder
-│   ├── photo1.jpg
-│   ├── photo2.jpg
-│   └── ...
-├── Album Name 2.zip
-├── Album Name 2/
-│   └── ...
-```
-
-## Customization
-
-The script provides several customization options via command line arguments:
-
-```bash
-# Basic customization
-python3 zonerama-downloader.py -d ~/Photos -u
-
-# Full customization  
-python3 zonerama-downloader.py --download-dir /backup/zonerama --unzip --delete
-```
-
-For programmatic use, you can also customize by modifying the script:
-
-```python
-downloader = ZoneramaDownloader(download_dir="my_custom_folder")
-downloader.run(unzip_albums=True, delete_zips=True)
-```
-
-## Notes
-
-- The script keeps the browser open after downloads are initiated so you can monitor progress and ensure downloads complete
-- Downloads are initiated by clicking the download buttons; actual download speed depends on your connection and Zonerama's servers
-- The script handles both Czech and English versions of the Zonerama interface
-- **Duplicate detection**: Already downloaded albums are automatically skipped
-- **Original quality**: The script automatically enables "original photos" option for best quality
-- **Unzip safety**: The script only processes ZIP files larger than 1KB to avoid corrupted files
+Feel free to submit issues and enhancement requests! The modular architecture makes contributions easier to implement and review.
 
 ## License
 
-This project is for educational purposes. Please respect Zonerama's terms of service and only download content you own or have permission to download.
+This project is provided as-is for educational and personal use.
