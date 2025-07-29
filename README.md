@@ -8,7 +8,7 @@ A Python tool to automatically download all albums from Zonerama.com using Selen
 - **Duplicate detection**: Skips albums that are already downloaded (supports diacritic normalization)
 - **Smart download management**: Handles download timeouts and retries
 - **Configurable download location**: Set custom download directory via CLI
-- **Auto-unzip functionality**: Automatically extract downloaded ZIP files
+- **Auto-unzip functionality**: Automatically extract all ZIP files in the download directory
 - **ZIP cleanup option**: Delete ZIP files after successful extraction
 - **Browser session persistence**: Keeps browser open for efficient batch downloads
 - **Cookie handling**: Automatically handles cookie consent modals
@@ -89,9 +89,9 @@ Both versions support identical command-line interfaces.
 ### Command Line Options
 
 - `-d, --download-dir`: Set custom download directory (default: `downloads/`)
-- `-u, --unzip`: Automatically unzip downloaded albums after download completes
+- `-u, --unzip`: Automatically unzip all ZIP files in the download directory (works with existing files)
 - `--delete`: Delete ZIP files after successful unzipping (requires `-u` or `--unzip`)
-- `-ud`: Convenient shorthand for `-u --delete` (download, unzip, and delete ZIPs)
+- `-ud`: Convenient shorthand for `-u --delete` (unzip all ZIPs and delete them after extraction)
 - `--version`: Show version information
 - `-h, --help`: Show help message
 
@@ -104,11 +104,14 @@ python3 main.py
 # Download to specific directory
 python3 main.py -d ~/MyPhotos
 
-# Download, unzip, and keep ZIP files
+# Download and unzip all ZIP files (keeps ZIP files)
 python3 main.py -u
 
-# Download, unzip, and delete ZIP files
+# Download and unzip all ZIP files (deletes ZIP files after extraction)
 python3 main.py -ud
+
+# Unzip existing ZIP files only (no downloading)
+python3 main.py -u --download-dir ~/ExistingPhotos
 
 # Full explicit form
 python3 main.py --download-dir ~/Photos --unzip --delete
@@ -127,7 +130,7 @@ python3 main.py --download-dir ~/Photos --unzip --delete
    - Handles download modal
    - Waits for download completion
    - Returns to album list
-7. **Post-processing**: If enabled, unzips all downloaded files and optionally deletes ZIPs
+7. **Post-processing**: If enabled, unzips all ZIP files in the download directory and optionally deletes ZIPs
 8. **Statistics**: Shows final download summary
 
 ## Features in Detail
@@ -142,7 +145,8 @@ The tool intelligently detects already downloaded albums by comparing names with
 - Provides detailed progress information
 
 ### Flexible Unzipping
-- Option to automatically unzip downloaded albums
+- Option to automatically unzip all ZIP files in the download directory
+- Works with both newly downloaded and existing ZIP files
 - Choice to keep or delete original ZIP files
 - Creates properly named directories for each album
 - Handles ZIP extraction errors gracefully
