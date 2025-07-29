@@ -1,4 +1,5 @@
-downloads
+downloads*
+foo*
 *.pyc
 __pycache__/
 *.pyo

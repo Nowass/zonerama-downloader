@@ -86,7 +86,7 @@ class ZoneramaDownloader:
             success = self._process_all_albums()
             
             # Post-process downloaded files if unzipping is enabled
-            if success and self.config.unzip and self.albums_downloaded > 0:
+            if success and self.config.unzip:
                 self._unzip_all_albums()
             
             # Display final statistics
